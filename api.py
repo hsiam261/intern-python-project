@@ -25,24 +25,20 @@ def refresh_token(refresh_token:str)->Dict[str,str]:
     return util.make_http_request(url,method,{},body)['body']
 
 
-def get_tweets(token:Dict[str,str])->Dict[str,str]:
+def get_tweets(request_manager:util.AuthenticatedHTTPRequestManager)->Dict[str,str]:
     endpoint = "/api/tweets"
-    method = "GET"
 
     url = urllib.parse.urlunsplit((PROTOCOL,HOST_NAME,endpoint,'',''))
 
-    http_requestor = util.AuthenticatedHTTPRequestManager(token,refresh_token)
-    return http_requestor(url,method,{})['body']
+    return request_manager.get(url,{})['body']
 
-def create_tweets(token:Dict[str,str],text:str)->Dict[str,str]:
+def create_tweets(request_manager:util.AuthenticatedHTTPRequestManager,text:str)->Dict[str,str]:
     endpoint = "/api/tweets"
-    method = "POST"
 
     url = urllib.parse.urlunsplit((PROTOCOL,HOST_NAME,endpoint,'',''))
 
     body = {"text":text}
 
-    http_requestor = util.AuthenticatedHTTPRequestManager(token,refresh_token)
-    return http_requestor(url,method,{},body)['body']
+    return request_manager.post(url,{},body)['body']
 
 

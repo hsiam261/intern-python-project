@@ -10,7 +10,8 @@ but, don't use any third party library
 feel free to make any changes in the given class and its methods' arguments or implementation as you see fit
 """
 
-def make_http_request(url:str,method:str,headers:Dict[str,str],body:Dict[str,Any]|bytes|None=None)->Dict[str,Any]:
+def make_http_request(url:str,method:str,headers:Dict[str,str],body:Dict[str,Any]|bytes|None=None,
+        token:str|None=None)->Dict[str,Any]:
     if type(body) == dict:
         body = bytes(json.dumps(body,indent=4),"utf-8")
 
@@ -18,8 +19,10 @@ def make_http_request(url:str,method:str,headers:Dict[str,str],body:Dict[str,Any
 
     if body and not request.has_header('Content-Type'):
         request.add_header("Content-Type","application/json")
+    
+    if token:
+        request.add_header("Authorization","Bearer {}".format(token))
 
-    request.add_header("User-Agent","Mozilla/5.0 (X11; Linux x86_64; rv:102.0) Gecko/20100101 Firefox/102.0")
     result = {}
 
     with urllib.request.urlopen(request) as response:
@@ -53,30 +56,46 @@ def log_time(fn):
         return ans
     return wrapper
 
-class AuthenticatedHTTPRequestManager:
-    def __init__(self,token:Dict[str,str],refresh_func:Callable[[str],Dict[str,str]]):
-        self.generator = token_generator(token,refresh_func)
 
-    @log_time    
-    def __call__(self,*args,**kwargs):
-        headers=None
-        if len(args)>=3:
-            headers = args[2]
-        elif 'headers' in kwargs:
-            headers=kwargs['headers']
-        else:
-            headers = {}
-            kwargs['headers']=headers
-        
-        headers['Authorization'] = "Bearer {}".format(next(self.generator))
+
+def _get_args_dict(fn,*args,**kwargs):
+    args_names = fn.__code__.co_varnames[:fn.__code__.co_argcount]
+    return {**dict(zip(args_names, args)), **kwargs}
+
+def refresh_and_try_again(fn):
+    def wrapper(*args,**kwargs):
+        args_dict = _get_args_dict(fn,*args,**kwargs)
+        self = args_dict['self']
+
         try:
-            return make_http_request(*args,**kwargs)
+            return fn(*args,**kwargs)
         except urllib.error.HTTPError as e:
             print(e.status,e.reason)
-            if e.status == 401:
-                print("refreshing token\n\n")
-                headers['Authorization'] = "Bearer {}".format(next(self.generator))
-                return make_http_request(*args,**kwargs)
+            if e.status==401:
+                print("Refreshing Token")
+                self.token = next(self.generator)
+                return fn(**args_dict)
+    return wrapper
 
 
+class AuthenticatedHTTPRequestManager:
+    def __init__(self,token:Dict[str,str],refresh_func:Callable[[str],Dict[str,str]]):
+        self.token = token
+        self.generator = token_generator(token,refresh_func)
+
+    
+    
+    @log_time
+    @refresh_and_try_again
+    def get(self,url:str,headers:Dict[str,str],body:Dict[str,Any]|bytes|None=None)->Dict[str,Any]:
+        return make_http_request(url,"GET",headers,body,token=self.token)
+    
+    @log_time
+    @refresh_and_try_again
+    def post(self,url:str,headers:Dict[str,str],body:Dict[str,Any]|bytes|None=None)->Dict[str,Any]:
+        return make_http_request(url,"POST",headers,body,token=self.token)
+
+
+
+ 
 

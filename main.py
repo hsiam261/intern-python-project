@@ -4,24 +4,21 @@ import util
 from time import sleep
 import pyjokes
 import getpass
-import http.client
-http.client.HTTPConnection.debuglevel = 5
  
 
 class CLIClient:
     def __init__(self) -> None:
-        self.token = None 
+        self.token_generator = None 
         self.tweets = None 
-
-
 
     def login(self):
         username = input("username : ")
         password = getpass.getpass("password : ")
-        self.token=api.login("elon","tesla")
-    
+        token=api.login(username,password)
+        self.request_manager = util.AuthenticatedHTTPRequestManager(token,api.refresh_token)
+
     def get_tweets(self):
-        tweets = api.get_tweets(self.token)
+        tweets = api.get_tweets(self.request_manager)
         for tweet in tweets:
             print("({}) {} tweeted at {}".format(tweet['id'],tweet['author']['username'],tweet['created_at']))
             print(tweet['text'])
@@ -46,7 +43,7 @@ class CLIClient:
         while True:
             joke = pyjokes.get_joke()
             if joke not in self.tweets:
-                result = api.create_tweets(self.token,joke)
+                result = api.create_tweets(self.request_manager,joke)
                 self.tweets = [joke]+self.tweets[:-1]
                 return result
     
